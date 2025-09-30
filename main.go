@@ -29,42 +29,48 @@ func main() {
 }
 
 func editPage(w http.ResponseWriter, r *http.Request) {
-	tmpl := `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Local Webpage Editor</title>
-        <script>
-            const socket = new WebSocket("ws://" + window.location.host + "/ws");
-            socket.onmessage = function(event) {
-                document.getElementById('currentContent').innerText = event.data;
-            };
+	// Create a new template and register the seq function
+	tmpl := template.Must(template.New("edit").Funcs(template.FuncMap{
+		"seq": seq, // Register the seq function
+	}).Parse(`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Local Webpage Editor</title>
+    <script>
+        const socket = new WebSocket("ws://" + window.location.host + "/ws");
+        socket.onmessage = function(event) {
+            // Update the selection in the dropdown
+            const data = JSON.parse(event.data);
+            document.getElementById('optionSelect' + data.index).value = data.value;
+        };
 
-            function updateSelection() {
-                const selectElement = document.getElementById('optionSelect');
-                const selectedValue = selectElement.value;
-                socket.send(selectedValue);
-            }
+        function updateSelection(index) {
+            const selectElement = document.getElementById('optionSelect' + index);
+            const selectedValue = selectElement.value;
+            socket.send(JSON.stringify({ index: index, value: selectedValue }));
+        }
 
-            // Refresh the page every 5 seconds
-            setInterval(function() {
-                location.reload();
-            }, 10000);
-        </script>
-    </head>
-    <body>
-        <h1>Select an Option</h1>
-        <h3>Select an Option:</h3>
-        <select id="optionSelect" onchange="updateSelection()">
-            <option value="Option 1" {{if eq .SelectedOption "Option 1"}}selected{{end}}>Option 1</option>
-            <option value="Option 2" {{if eq .SelectedOption "Option 2"}}selected{{end}}>Option 2</option>
-            <option value="Option 3" {{if eq .SelectedOption "Option 3"}}selected{{end}}>Option 3</option>
+        // Refresh the page every 10 seconds
+        setInterval(function() {
+            location.reload();
+        }, 10000); // Changed from 5000 to 10000 milliseconds
+    </script>
+</head>
+<body>
+    <h1>Select Options</h1>
+    {{range $i := seq 1 14}}
+        <label for="optionSelect{{$i}}">{{$i}}</label>
+        <select id="optionSelect{{$i}}" onchange="updateSelection({{$i}})">
+            <option value="Option 1">Option 1</option>
+            <option value="Option 2">Option 2</option>
+            <option value="Option 3">Option 3</option>
         </select><br>
-        <h2>Current Selection:</h2>
-        <p id="currentContent">{{.SelectedOption}}</p>
-    </body>
-    </html>
-    `
+    {{end}}
+</body>
+</html>
+`))
+
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -74,8 +80,16 @@ func editPage(w http.ResponseWriter, r *http.Request) {
 		SelectedOption: selectedOption,
 	}
 
-	t := template.Must(template.New("edit").Parse(tmpl))
-	t.Execute(w, data)
+	tmpl.Execute(w, data)
+}
+
+// Helper function to generate a sequence of numbers
+func seq(start, end int) []int {
+	s := make([]int, end-start+1)
+	for i := start; i <= end; i++ {
+		s[i-start] = i
+	}
+	return s
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
