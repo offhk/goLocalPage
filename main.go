@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -37,13 +38,63 @@ func editPage(w http.ResponseWriter, r *http.Request) {
 <html>
 <head>
     <title>Local Webpage Editor</title>
+
+
+<style>
+
+body {
+background-color: black;
+}
+
+label {
+  display: inline-block;
+  width: 20px;
+  text-align: right;
+  color: aqua;
+  font: 50px;
+  margin-right: 5px;
+}
+
+select {
+  display: inline-block;
+  vertical-align: middle;
+  font-weight: bold;
+}
+
+</style>
+
+
+
     <script>
         const socket = new WebSocket("ws://" + window.location.host + "/ws");
-        socket.onmessage = function(event) {
-            // Update the selection in the dropdown
-            const data = JSON.parse(event.data);
-            document.getElementById('optionSelect' + data.index).value = data.value;
-        };
+socket.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+
+    // Check if data is an object with number keys (full state)
+    if (typeof data === "object" && !Array.isArray(data)) {
+        // Update all selects based on keys
+        for (const key in data) {
+            const element = document.getElementById('optionSelect' + key);
+            if (element) {
+                element.value = data[key];
+            }
+        }
+        return;
+    }
+
+    // Otherwise, expect { index, value } object for one selection update
+    if (data.index === undefined || data.value === undefined) {
+        console.warn('Received message missing index or value:', data);
+        return;
+    }
+
+    const element = document.getElementById('optionSelect' + data.index);
+    if (element) {
+        element.value = data.value;
+    } else {
+        console.warn('No element found for id:', 'optionSelect' + data.index);
+    }
+};
 
         function updateSelection(index) {
             const selectElement = document.getElementById('optionSelect' + index);
@@ -54,17 +105,25 @@ func editPage(w http.ResponseWriter, r *http.Request) {
         // Refresh the page every 10 seconds
         setInterval(function() {
             location.reload();
-        }, 10000); // Changed from 5000 to 10000 milliseconds
+        }, 7000); // Changed from 5000 to 10000 milliseconds
     </script>
 </head>
+
 <body>
-    <h1>Select Options</h1>
     {{range $i := seq 1 14}}
         <label for="optionSelect{{$i}}">{{$i}}</label>
         <select id="optionSelect{{$i}}" onchange="updateSelection({{$i}})">
-            <option value="Option 1">Option 1</option>
-            <option value="Option 2">Option 2</option>
-            <option value="Option 3">Option 3</option>
+            <option value="Option 1"></option>
+            <option value="Option 2">YC</option>
+            <option value="Option 3">Sern</option>
+            <option value="Option 4">Wtm</option>
+            <option value="Option 5">San</option>
+            <option value="Option 6">Ln</option>
+            <option value="Option 7">Bt</option>
+            <option value="Option 8">WW</option>
+            <option value="Option 9">Kv</option>
+            <option value="Option 10">Kg</option>
+            <option value="Option 11">??</option>
         </select><br>
     {{end}}
 </body>
@@ -92,46 +151,50 @@ func seq(start, end int) []int {
 	return s
 }
 
+var selections = make(map[int]string)
+
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Error during connection upgrade:", err)
+		log.Println("Error upgrading:", err)
 		return
 	}
 	defer conn.Close()
 
 	clients[conn] = true
-	log.Println("New client connected")
 
-	// Send the current selected option to the newly connected client
 	mu.Lock()
-	err = conn.WriteMessage(websocket.TextMessage, []byte(selectedOption))
+	// Send entire current selections map as JSON on connect
+	allSelectionsJSON, _ := json.Marshal(selections)
 	mu.Unlock()
-	if err != nil {
-		log.Println("Error sending initial message:", err)
-		return
-	}
+	conn.WriteMessage(websocket.TextMessage, allSelectionsJSON)
 
 	for {
-		// Read message from the WebSocket
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Error reading message:", err)
+			log.Println("Read error:", err)
 			delete(clients, conn)
 			break
 		}
 
+		var update struct {
+			Index int
+			Value string
+		}
+		err = json.Unmarshal(msg, &update)
+		if err != nil {
+			log.Println("JSON unmarshal error:", err)
+			continue
+		}
+
 		mu.Lock()
-		selectedOption = string(msg) // Convert message to string
+		selections[update.Index] = update.Value
 		mu.Unlock()
 
-		log.Printf("Broadcasting message: %s\n", selectedOption)
-
-		// Broadcast the message to all clients
+		// Broadcast update to all clients
 		for client := range clients {
 			err := client.WriteMessage(websocket.TextMessage, msg)
 			if err != nil {
-				log.Println("Error broadcasting message:", err)
 				client.Close()
 				delete(clients, client)
 			}
