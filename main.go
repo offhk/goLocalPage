@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	content = "Edit this text."
-	mu      sync.Mutex
+	content        = "Edit this text."
+	selectedOption = "Option 1" // Default selected option
+	mu             sync.Mutex
 )
 
 func main() {
@@ -38,21 +39,42 @@ func editPage(w http.ResponseWriter, r *http.Request) {
         </script>
     </head>
     <body>
-        <h1>Edit the Content 002</h1>
+        <h1>Edit the Content</h1>
         <form action="/save" method="post">
-            <textarea name="content" rows="10" cols="50">{{.}}</textarea><br>
+            <textarea name="content" rows="10" cols="50">{{.Content}}</textarea><br>
+            <h3>Select an Option:</h3>
+            <label>
+                <input type="radio" name="option" value="Option 1" {{if eq .SelectedOption "Option 1"}}checked{{end}}>
+                Option 1
+            </label><br>
+            <label>
+                <input type="radio" name="option" value="Option 2" {{if eq .SelectedOption "Option 2"}}checked{{end}}>
+                Option 2
+            </label><br>
+            <label>
+                <input type="radio" name="option" value="Option 3" {{if eq .SelectedOption "Option 3"}}checked{{end}}>
+                Option 3
+            </label><br>
             <input type="submit" value="Save">
         </form>
         <h2>Current Content:</h2>
-        <p id="currentContent">{{.}}</p>
+        <p id="currentContent">{{.Content}}</p>
     </body>
     </html>
     `
 	mu.Lock()
 	defer mu.Unlock()
 
+	data := struct {
+		Content        string
+		SelectedOption string
+	}{
+		Content:        content,
+		SelectedOption: selectedOption,
+	}
+
 	t := template.Must(template.New("edit").Parse(tmpl))
-	t.Execute(w, content)
+	t.Execute(w, data)
 }
 
 func saveContent(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +84,7 @@ func saveContent(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		r.ParseForm()
 		content = r.FormValue("content")
+		selectedOption = r.FormValue("option") // Save the selected option
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
