@@ -72,7 +72,7 @@ socket.onmessage = function(event) {
 
     // Check if data is an object with number keys (full state)
     if (typeof data === "object" && !Array.isArray(data)) {
-        // Update all selects based on keys
+        // Update all selects based on keysgit
         for (const key in data) {
             const element = document.getElementById('optionSelect' + key);
             if (element) {
