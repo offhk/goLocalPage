@@ -22,7 +22,7 @@ func main() {
 	http.HandleFunc("/ws", handleWebSocket)
 
 	// Start the server on port 8080
-	log.Println("Server started on :8080")
+	log.Println("Server started on :9000")
 	err := http.ListenAndServe(":9000", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
@@ -172,7 +172,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Read error:", err)
+			log.Println("Read null:", err)
 			delete(clients, conn)
 			break
 		}
